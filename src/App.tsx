@@ -457,6 +457,10 @@ export default function App() {
     return <LandingPage onEnter={() => setView('auth')} onOpenLegal={openLegal} />;
   }
 
+  // Normalize view: if user is signed in but view is still 'auth' or 'landing',
+  // treat as 'dashboard' until the data-load effect sets it explicitly.
+  const effectiveView: View = (view === 'auth' || view === 'landing') ? 'dashboard' : view;
+
   const body = (() => {
     if (dataLoading) {
       return (
@@ -476,7 +480,7 @@ export default function App() {
       );
     }
 
-    switch (view) {
+    switch (effectiveView) {
       case 'dashboard':
         return (
           <>
@@ -611,7 +615,7 @@ export default function App() {
               key={key}
               onClick={() => setView(key)}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                view === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                effectiveView === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -640,7 +644,7 @@ export default function App() {
                 key={key}
                 onClick={() => setView(key)}
                 className={`inline-flex min-h-[48px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  view === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200'
+                  effectiveView === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
