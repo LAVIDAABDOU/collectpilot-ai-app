@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CreditCard, FileText, Inbox, ListChecks, Settings as SettingsIcon, ShieldCheck, Sparkles, Upload } from 'lucide-react';
+import { BarChart3, CreditCard, FileText, HandCoins, ListChecks, MessageSquareText, Scale, Settings as SettingsIcon, ShieldCheck, Sparkles, Upload } from 'lucide-react';
 import type { Invoice, LogEntry, Settings } from '@/types';
 import { loadInvoices, loadLog, loadSettings, saveInvoices, saveLog, saveSettings, uid } from '@/lib/storage';
 import { onCheckoutOutcome } from '@/lib/paddle';
@@ -14,9 +14,13 @@ import FollowUpLog from '@/components/FollowUpLog';
 import SettingsPage from '@/components/SettingsPage';
 import BillingPage from '@/components/BillingPage';
 import LegalPage, { type LegalDoc } from '@/components/LegalPage';
-import { ApproveModal, DisputeModal, PromiseModal } from '@/components/Modals';
+import { ApproveModal, DeleteModal, DisputeModal, InvoiceFormModal, PromiseModal } from '@/components/Modals';
+import PromisesPage from '@/components/PromisesPage';
+import DisputesPage from '@/components/DisputesPage';
+import ReportsPage from '@/components/ReportsPage';
+import FollowUpsPage from '@/components/FollowUpsPage';
 
-type View = 'landing' | 'dashboard' | 'import' | 'invoices' | 'message' | 'log' | 'billing' | 'settings' | 'legal';
+type View = 'landing' | 'dashboard' | 'import' | 'invoices' | 'message' | 'log' | 'promises' | 'disputes' | 'reports' | 'billing' | 'settings' | 'legal';
 
 const LEGAL_PATHS: Record<string, LegalDoc> = { '/privacy': 'privacy', '/terms': 'terms', '/refund': 'refund' };
 const LEGAL_TITLES: Record<LegalDoc, string> = { privacy: 'Privacy Policy', terms: 'Terms of Service', refund: 'Refund Policy' };
@@ -26,10 +30,14 @@ function legalFromPath(): LegalDoc | null {
 }
 
 const NAV: { key: View; label: string; icon: typeof BarChart3 }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { key: 'import', label: 'Import CSV', icon: Upload },
+  { key: 'dashboard', label: 'Overview', icon: BarChart3 },
   { key: 'invoices', label: 'Invoices', icon: FileText },
+  { key: 'message', label: 'AI Follow-ups', icon: MessageSquareText },
   { key: 'log', label: 'Follow-up Log', icon: ListChecks },
+  { key: 'promises', label: 'Payment Promises', icon: HandCoins },
+  { key: 'disputes', label: 'Disputes', icon: Scale },
+  { key: 'reports', label: 'Reports', icon: BarChart3 },
+  { key: 'import', label: 'Import CSV', icon: Upload },
   { key: 'billing', label: 'Billing', icon: CreditCard },
   { key: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
@@ -45,6 +53,9 @@ export default function App() {
   const [disputeFor, setDisputeFor] = useState<Invoice | null>(null);
   const [approveFor, setApproveFor] = useState<Invoice | null>(null);
   const [blockedInvoice, setBlockedInvoice] = useState<Invoice | null>(null);
+  const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => saveInvoices(invoices), [invoices]);
@@ -266,10 +277,70 @@ export default function App() {
     setToast('All data deleted. The workspace is empty.');
   };
 
+  const handleSaveInvoice = (data: Omit<Invoice, 'id' | 'remindersSent' | 'lastSentAt' | 'pauseUntil' | 'promiseNote' | 'disputed' | 'disputeNote'>) => {
+    if (editInvoice) {
+      const target = editInvoice;
+      setInvoices((prev) => prev.map((i) => i.id === target.id ? { ...i, ...data } : i));
+      addLog({
+        type: 'cleared',
+        invoiceId: target.id,
+        invoiceNumber: data.invoiceNumber,
+        clientName: data.clientName,
+        note: `Invoice ${data.invoiceNumber} edited.`,
+      });
+      setEditInvoice(null);
+      setToast(`Invoice ${data.invoiceNumber} updated.`);
+    } else {
+      const newInv: Invoice = {
+        ...data,
+        id: uid(),
+        remindersSent: 0,
+        lastSentAt: null,
+        pauseUntil: null,
+        promiseNote: null,
+        disputed: false,
+        disputeNote: null,
+      };
+      setInvoices((prev) => [...prev, newInv]);
+      addLog({
+        type: 'draft',
+        invoiceId: newInv.id,
+        invoiceNumber: newInv.invoiceNumber,
+        clientName: newInv.clientName,
+        note: `Invoice ${newInv.invoiceNumber} added manually.`,
+      });
+      setShowAddForm(false);
+      setToast(`Invoice ${data.invoiceNumber} added.`);
+    }
+  };
+
+  const confirmDeleteInvoice = () => {
+    if (!deleteInvoice) return;
+    const target = deleteInvoice;
+    setInvoices((prev) => prev.filter((i) => i.id !== target.id));
+    addLog({
+      type: 'cleared',
+      invoiceId: target.id,
+      invoiceNumber: target.invoiceNumber,
+      clientName: target.clientName,
+      note: `Invoice ${target.invoiceNumber} deleted.`,
+    });
+    setDeleteInvoice(null);
+    setToast(`Invoice ${target.invoiceNumber} deleted.`);
+  };
+
   const body = (() => {
     switch (view) {
       case 'dashboard':
-        return <Dashboard invoices={invoices} log={log} settings={settings} onOpenInvoice={openInvoice} />;
+        return (
+          <>
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-amber-600" />
+              <span><strong>DEMONSTRATION DATA</strong> — 20 invoices, 9 overdue, $56,450 outstanding. No backend is connected yet.</span>
+            </div>
+            <Dashboard invoices={invoices} log={log} settings={settings} onOpenInvoice={openInvoice} />
+          </>
+        );
       case 'import':
         return <ImportPage onImport={handleImport} existingCount={invoices.length} />;
       case 'invoices':
@@ -280,6 +351,9 @@ export default function App() {
             onOpenInvoice={openInvoice}
             onLogPromise={setPromiseFor}
             onLogDispute={setDisputeFor}
+            onEditInvoice={setEditInvoice}
+            onDeleteInvoice={setDeleteInvoice}
+            onAddInvoice={() => setShowAddForm(true)}
             blockedInvoice={blockedInvoice}
             onDismissBlocked={() => setBlockedInvoice(null)}
           />
@@ -288,10 +362,10 @@ export default function App() {
         return activeInvoice ? (
           <div className="mx-auto max-w-3xl">
             <button
-              onClick={() => setView('invoices')}
+              onClick={() => { setActiveId(null); setView('message'); }}
               className="mb-4 text-sm font-medium text-blue-600 hover:text-blue-700"
             >
-              ← Back to invoices
+              ← Back to follow-ups
             </button>
             {isHardBlocked(activeInvoice) || !canSendFollowUp(activeInvoice).allowed ? (
               <div className="space-y-4">
@@ -305,10 +379,10 @@ export default function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setView('invoices')}
+                  onClick={() => { setActiveId(null); setView('message'); }}
                   className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                 >
-                  Back to Invoices
+                  Back to Follow-ups
                 </button>
               </div>
             ) : (
@@ -316,16 +390,7 @@ export default function App() {
             )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
-            <Inbox className="mx-auto h-12 w-12 text-slate-300" />
-            <p className="mt-3 text-sm text-slate-500">Pick an invoice from the list to draft a follow-up.</p>
-            <button
-              onClick={() => setView('invoices')}
-              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Go to Invoices
-            </button>
-          </div>
+          <FollowUpsPage invoices={invoices} settings={settings} onOpenInvoice={openInvoice} />
         );
       case 'log':
         return (
@@ -338,6 +403,12 @@ export default function App() {
             onResolveDispute={resolveDispute}
           />
         );
+      case 'promises':
+        return <PromisesPage invoices={invoices} log={log} settings={settings} onResumeReminder={resumeReminder} />;
+      case 'disputes':
+        return <DisputesPage invoices={invoices} log={log} settings={settings} onResolveDispute={resolveDispute} />;
+      case 'reports':
+        return <ReportsPage invoices={invoices} log={log} settings={settings} />;
       case 'billing':
         return <BillingPage agencyName={settings.agencyName} />;
       case 'settings':
@@ -392,7 +463,7 @@ export default function App() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {key === 'invoices' && followUpCount > 0 && (
+              {key === 'message' && followUpCount > 0 && (
                 <span className="ml-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
                   {followUpCount}
                 </span>

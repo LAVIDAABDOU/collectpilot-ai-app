@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Ban, Download, MessageSquareText, Search, X } from 'lucide-react';
+import { Ban, Download, MessageSquareText, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import type { Classification, Invoice, Settings } from '@/types';
 import { formatDate, formatMoney } from '@/lib/format';
 import {
@@ -22,6 +22,9 @@ interface Props {
   onOpenInvoice: (invoice: Invoice) => void;
   onLogPromise: (invoice: Invoice) => void;
   onLogDispute: (invoice: Invoice) => void;
+  onEditInvoice: (invoice: Invoice) => void;
+  onDeleteInvoice: (invoice: Invoice) => void;
+  onAddInvoice: () => void;
   blockedInvoice: Invoice | null;
   onDismissBlocked: () => void;
 }
@@ -38,7 +41,18 @@ const STATUS_TABS: [StatusFilter, string][] = [
   ['disputed', 'Disputed'],
 ];
 
-export default function InvoicesTable({ invoices, settings, onOpenInvoice, onLogPromise, onLogDispute, blockedInvoice, onDismissBlocked }: Props) {
+export default function InvoicesTable({
+  invoices,
+  settings,
+  onOpenInvoice,
+  onLogPromise,
+  onLogDispute,
+  onEditInvoice,
+  onDeleteInvoice,
+  onAddInvoice,
+  blockedInvoice,
+  onDismissBlocked,
+}: Props) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
@@ -96,13 +110,22 @@ export default function InvoicesTable({ invoices, settings, onOpenInvoice, onLog
             {filtered.length} of {invoices.length} invoices
           </p>
         </div>
-        <button
-          onClick={() => downloadCSV(`collectpilot-invoices-${new Date().toISOString().slice(0, 10)}.csv`, exportInvoicesCSV(invoices))}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-        >
-          <Download className="h-4 w-4" />
-          Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onAddInvoice}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Add Invoice
+          </button>
+          <button
+            onClick={() => downloadCSV(`collectpilot-invoices-${new Date().toISOString().slice(0, 10)}.csv`, exportInvoicesCSV(invoices))}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -191,7 +214,8 @@ export default function InvoicesTable({ invoices, settings, onOpenInvoice, onLog
         })}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -274,21 +298,17 @@ export default function InvoicesTable({ invoices, settings, onOpenInvoice, onLog
                           >
                             Dispute
                           </button>
+                          {needsFollowUp(i) && (
+                            <button
+                              onClick={() => onOpenInvoice(i)}
+                              title="Draft follow-up"
+                              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                            >
+                              <MessageSquareText className="h-3.5 w-3.5" />
+                              Draft
+                            </button>
+                          )}
                         </>
-                      )}
-                      {bal > 0 && !i.disputed && (
-                        <button
-                          onClick={() => onOpenInvoice(i)}
-                          title="Draft follow-up"
-                          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                            needsFollowUp(i)
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
-                              : 'text-blue-700 hover:bg-blue-50'
-                          }`}
-                        >
-                          <MessageSquareText className="h-3.5 w-3.5" />
-                          Draft
-                        </button>
                       )}
                       {isHardBlocked(i) && (
                         <span
@@ -299,6 +319,20 @@ export default function InvoicesTable({ invoices, settings, onOpenInvoice, onLog
                           Blocked
                         </span>
                       )}
+                      <button
+                        onClick={() => onEditInvoice(i)}
+                        title="Edit invoice"
+                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteInvoice(i)}
+                        title="Delete invoice"
+                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -313,6 +347,96 @@ export default function InvoicesTable({ invoices, settings, onOpenInvoice, onLog
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-3 md:hidden">
+        {filtered.map((i) => {
+          const bal = balanceOf(i);
+          const days = bal > 0 ? Math.max(daysOverdue(i.dueDate), 0) : 0;
+          const state = invoiceState(i);
+          const cls = classes.get(i.clientName.trim().toLowerCase()) ?? 'Good';
+          return (
+            <div key={i.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-900">{i.clientName}</p>
+                  <p className="text-xs text-slate-400">{i.invoiceNumber}</p>
+                </div>
+                <span className={`shrink-0 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${state.className}`}>
+                  {state.label}
+                </span>
+              </div>
+              <div className="mt-3 flex items-end justify-between">
+                <div>
+                  <p className="text-lg font-semibold tabular-nums text-slate-900">{formatMoney(bal, settings.currency)}</p>
+                  <p className="text-xs text-slate-400">
+                    Due {formatDate(i.dueDate, settings.timezone)}
+                    {days > 0 && ` · ${days}d overdue`}
+                  </p>
+                  {i.pauseUntil && (
+                    <p className="mt-0.5 text-xs text-emerald-600">
+                      Promised: {formatDate(i.pauseUntil, settings.timezone)}
+                    </p>
+                  )}
+                </div>
+                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${CLASSIFICATION_STYLES[cls]}`}>
+                  {cls}
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                {bal > 0 && !i.disputed && (
+                  <>
+                    <button
+                      onClick={() => onLogPromise(i)}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"
+                    >
+                      Promise
+                    </button>
+                    <button
+                      onClick={() => onLogDispute(i)}
+                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600"
+                    >
+                      Dispute
+                    </button>
+                    {needsFollowUp(i) && (
+                      <button
+                        onClick={() => onOpenInvoice(i)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white"
+                      >
+                        <MessageSquareText className="h-3.5 w-3.5" />
+                        Draft
+                      </button>
+                    )}
+                  </>
+                )}
+                {isHardBlocked(i) && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-400">
+                    <Ban className="h-3.5 w-3.5" />
+                    Blocked
+                  </span>
+                )}
+                <button
+                  onClick={() => onEditInvoice(i)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDeleteInvoice(i)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">
+            No invoices match these filters.
+          </div>
+        )}
       </div>
     </div>
   );
