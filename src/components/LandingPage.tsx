@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BarChart3, Check, FileText, Mail, ShieldCheck, Sparkles, Upload } from 'lucide-react';
 import { openPlanCheckout, type PaddlePlanName } from '@/lib/paddle';
 
@@ -9,23 +10,34 @@ interface Props {
 const PLANS = [
   {
     name: 'Starter',
-    price: 29,
+    monthly: 29,
+    yearly: 290,
     blurb: 'For small agencies getting started with collections.',
     features: ['50 invoices', 'AI follow-up emails', 'Dashboard'],
     popular: false,
   },
   {
     name: 'Growth',
-    price: 79,
+    monthly: 79,
+    yearly: 790,
     blurb: 'For growing agencies with a steady invoice flow.',
     features: ['200 invoices', 'AI follow-up emails', 'Dashboard', 'CSV Import'],
     popular: true,
   },
   {
     name: 'Scale',
-    price: 199,
+    monthly: 199,
+    yearly: 1990,
     blurb: 'For established agencies that want it all.',
     features: ['Unlimited invoices', 'Everything in Growth', 'Priority Support'],
+    popular: false,
+  },
+  {
+    name: 'Enterprise',
+    monthly: null,
+    yearly: null,
+    blurb: 'For larger organizations with custom needs.',
+    features: ['Everything in Scale', 'Custom integrations', 'Dedicated account manager', 'Priority support'],
     popular: false,
   },
 ];
@@ -38,6 +50,8 @@ const PROOF = [
 ];
 
 export default function LandingPage({ onEnter, onOpenLegal }: Props) {
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+
   return (
     <div className="min-h-screen bg-white">
       {/* Top bar */}
@@ -106,57 +120,91 @@ export default function LandingPage({ onEnter, onOpenLegal }: Props) {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="text-center">
             <span className="inline-flex rounded-full bg-white px-3.5 py-1 text-xs font-medium uppercase tracking-wide text-slate-500 ring-1 ring-inset ring-slate-200">
-              Proposed Pricing
+              Pricing
             </span>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
               Simple plans that pay for themselves
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm text-slate-500">
-              One recovered invoice usually covers the month. Pick a plan and start with a free trial.
+              One recovered invoice usually covers the month. Pick a plan and start with a 7-day free trial.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 lg:grid-cols-3">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative flex flex-col rounded-2xl bg-white p-7 shadow-sm ${
-                  plan.popular
-                    ? 'ring-2 ring-blue-900 lg:-translate-y-2 lg:shadow-lg'
-                    : 'border border-slate-200'
-                }`}
-              >
-                {plan.popular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-900 px-3.5 py-1 text-xs font-semibold text-white shadow-sm">
-                    MOST POPULAR
-                  </span>
-                )}
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{plan.name}</h3>
-                <p className="mt-3">
-                  <span className="text-4xl font-semibold tracking-tight text-slate-900">${plan.price}</span>
-                  <span className="text-sm text-slate-400">/month</span>
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">{plan.blurb}</p>
-                <ul className="mt-6 flex-1 space-y-2.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-slate-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-900" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+          {/* Billing toggle */}
+          <div className="mt-8 flex justify-center">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              {(['monthly', 'yearly'] as const).map((period) => (
                 <button
-                  onClick={() => void openPlanCheckout(plan.name as PaddlePlanName, 'monthly')}
-                  className={`mt-7 w-full rounded-lg px-4 py-3 text-sm font-medium shadow-sm transition-colors ${
-                    plan.popular
-                      ? 'bg-blue-900 text-white hover:bg-blue-800'
-                      : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                  key={period}
+                  onClick={() => setBillingPeriod(period)}
+                  className={`rounded-md px-5 py-2 text-sm font-medium capitalize transition-colors ${
+                    billingPeriod === period
+                      ? 'bg-blue-900 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  Start Free Trial
+                  {period}
+                  {period === 'yearly' && <span className="ml-1.5 text-xs text-blue-300">save ~17%</span>}
                 </button>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-12 grid gap-6 lg:grid-cols-4">
+            {PLANS.map((plan) => {
+              const price = billingPeriod === 'monthly' ? plan.monthly : plan.yearly;
+              const isEnterprise = plan.monthly === null;
+              return (
+                <div
+                  key={plan.name}
+                  className={`relative flex flex-col rounded-2xl bg-white p-7 shadow-sm ${
+                    plan.popular
+                      ? 'ring-2 ring-blue-900 lg:-translate-y-2 lg:shadow-lg'
+                      : 'border border-slate-200'
+                  }`}
+                >
+                  {plan.popular && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-900 px-3.5 py-1 text-xs font-semibold text-white shadow-sm">
+                      MOST POPULAR
+                    </span>
+                  )}
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{plan.name}</h3>
+                  <p className="mt-3">
+                    {isEnterprise ? (
+                      <span className="text-3xl font-semibold tracking-tight text-slate-900">Custom</span>
+                    ) : (
+                      <>
+                        <span className="text-4xl font-semibold tracking-tight text-slate-900">${price}</span>
+                        <span className="text-sm text-slate-400">/{billingPeriod === 'monthly' ? 'month' : 'year'}</span>
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">{plan.blurb}</p>
+                  <ul className="mt-6 flex-1 space-y-2.5">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2.5 text-sm text-slate-700">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-900" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={
+                      isEnterprise
+                        ? onEnter
+                        : () => void openPlanCheckout(plan.name as PaddlePlanName, billingPeriod)
+                    }
+                    className={`mt-7 w-full rounded-lg px-4 py-3 text-sm font-medium shadow-sm transition-colors ${
+                      plan.popular
+                        ? 'bg-blue-900 text-white hover:bg-blue-800'
+                        : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                    }`}
+                  >
+                    {isEnterprise ? 'Contact Sales' : 'Start Free Trial'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
